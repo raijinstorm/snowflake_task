@@ -48,6 +48,10 @@ Note: multiple queries read the stream, but only the first one got correct value
 
 Note: ginve dataset is strange. It has 100k rows and about 100k unique passengers and about 100k unique flights.  It would be okay, if only passengers were all unique or vice verse, but not togeather . The data looks unrealistic.
 
+## Finishing up (Day 6)
+ - Added logging to audit table
+ - Added DML/DDL time-travle queries , secure view with row policy
+
 
 
 # Ideas how to imporve project
