@@ -1,14 +1,12 @@
-# snowflake_task
+# Snowflake ETL Pipeline with Airflow
 
-# Airflow and MongoDB ETL Pipeline
+This project showcases the creation of a small Data Warehouse (DWH) using Snowflake, a powerful cloud-based columnar database. The ETL pipeline is built with Apache Airflow and processes data through multiple stages to prepare it for analytics and dashboards.
 
-This project demonstrates a simple ETL (Extract, Transform, Load) pipeline using Apache Airflow and MongoDB. The entire application, including the Airflow services and the database, is containerized using Docker.
+The pipeline involves several structured layers:
 
-The pipeline is designed to automatically detect a new CSV file, process its contents, and load the cleaned data into a MongoDB database.
-
-### How It Works
-
-
+* **Raw Stage:** Initial load of data directly from source CSV files.
+* **Core Stage:** Transformed and cleaned data with applied constraints.
+* **Analytics Stage (Data Mart):** Data structured for efficient analytical queries and dashboarding.
 
 -----
 
@@ -62,19 +60,24 @@ The pipeline is designed to automatically detect a new CSV file, process its con
 
 -----
 
-## How to Use
+## Pipeline Workflow
 
-To run the pipeline, simply **place your CSV file named `tiktok_google_play_reviews.csv` into the `data/` directory**. The `FileSensor` in the first DAG will detect it automatically and start the process.
+The ETL pipeline comprises the following stages:
 
------
+1. **Initial Load:** Complete data load from source CSV files into Snowflake.
+2. **Incremental Load:** Subsequent data loads using Change Data Capture (CDC) methodology.
 
-## DAG Visualization
+Key features implemented:
 
-Here is a screenshot of DAG in the Airflow UI.
+* Automated data processing from CSV to DWH.
+* Data transformations and cleaning operations.
+* Audit logging for insert and update operations.
+* Time-travel feature for DDL and DML operations.
+* Secure views with Row-Level Security policies.
 
-![](image.png)
 
------
 
-## Future Improvements
+
+
+
 
