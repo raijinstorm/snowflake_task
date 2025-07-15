@@ -208,3 +208,5 @@ __marimo__/
 
 
 .test_data/
+data/
+dags/reset_dag_2.py

@@ -28,13 +28,25 @@ I decided to do the same docker-compose set up for an airflow as I used in the l
  - Stages (raw, core, mart)
  After this I set up connection from airflow to snowflake and tested it
 
-## Creating DAGs with main logic (day 5)
+## Creating DAGs with main logic (day 5-6)
  1st dag for creating all the neccesary tables, 2nd for data pipeline. Implemented loading local csv file to raw table. I decided to simplify a pipeline and instead of 3NF for core table use widetable but cleaned. So for now the pipiline looks like this: 
  1. CSV file is loaded into raw table 
  2. New data is merged into core table using stream from raw table
  3. New data is merged into Star-schema tables using stream from core table
 
- Notes: csv files should have unique names. The file with the same name is not going to be loaded again. 
+ Note: csv files should have unique names. The file with the same name is not going to be loaded again (not a bug , but feature) 
+ Note: found max length of text in string columns inside csv using pandas to diside on length of VARCHAR for DB
+
+Initially start table consisted of fact table and 4 dimensions (dim_passenger, dim_airport, dim_date, dim_flight) but then a problem appeared with flight dimension, bcs it basically did not have natural key. But, you could try to identify flight by pilot_name + flight_status + arrival_airport + departure_date. 
+
+Note: just to make all surorgate keys integers I used IDENTITY, but actually it is not obligatory
+
+
+## Debugging the pipiline (Day 6)
+ Making whole pipline work so that I see final mart tables were just half of problem. I created few small csv files from data inside give csv file and started testing. I put in these csv incorect values, added duplicates, etc. When I made sure that it works as intended a decided to procces the whole csv file. After a run all of the tables looks normal, except fact table that ha 500m rows, while others had only 100k. I found out that the problem was in merges, bcs the "source" data for merge contained duplicates and bcs merges are parralel it put all the duplicates into table simultaneously => tables had duplicats which resulted in explosion of data for fact table. After I fixed this , the amount of data in dim_airport and dim_date significantly decreased, 
+
+Note: ginve dataset is strange. It has 100k rows and about 100k unique passengers and about 100k unique flights.  It would be okay, if only passengers were all unique or vice verse, but not togeather . The data looks unrealistic.
+
 
 
 # Ideas how to imporve project

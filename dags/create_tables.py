@@ -46,8 +46,6 @@ with DAG(
         sql = """
             CREATE STREAM IF NOT EXISTS raw_stage.passengers_wide_stream
             ON TABLE raw_stage.passengers_wide
-            APPEND_ONLY = TRUE
-            SHOW_INITIAL_ROWS = FALSE;
         """
     )
     
@@ -87,5 +85,61 @@ with DAG(
         """
     )
     
+    create_star_schema_tables = SQLExecuteQueryOperator(
+        task_id = "create_star_schema_tables",
+        conn_id = "snowflake_default",
+        sql = """
+            USE SCHEMA mart_stage;
+
+            CREATE TABLE IF NOT EXISTS dim_passenger (
+            passenger_sk    NUMBER(38,0)  IDENTITY PRIMARY KEY,
+            passenger_id    VARCHAR       NOT NULL, 
+            first_name      VARCHAR       NOT NULL,
+            last_name       VARCHAR       NOT NULL,
+            gender          VARCHAR       NOT NULL,
+            age             NUMBER        NOT NULL,
+            nationality     VARCHAR       NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS dim_flight (
+            flight_sk       NUMBER(38,0)  IDENTITY PRIMARY KEY,
+            flight_id       VARCHAR       NOT NULL,
+            pilot_name      VARCHAR       NOT NULL,
+            flight_status   VARCHAR       NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS dim_airport (
+            airport_sk       NUMBER(38,0) IDENTITY PRIMARY KEY,
+            airport_code     VARCHAR      NOT NULL,
+            airport_name     VARCHAR      NOT NULL,
+            country_code     VARCHAR      NOT NULL,
+            country_name     VARCHAR      NOT NULL,
+            continent_code   VARCHAR      NOT NULL,
+            continent_name   VARCHAR      NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS dim_date (
+            date_sk        NUMBER(38,0)  IDENTITY PRIMARY KEY,
+            date           DATE          NOT NULL,
+            day_of_week    NUMBER        NOT NULL,
+            month          NUMBER        NOT NULL,
+            year           NUMBER        NOT NULL,
+            quarter        NUMBER        NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS fact_passenger_flight (
+            id                VARCHAR    PRIMARY KEY,  
+            passenger_sk      NUMBER(38,0) REFERENCES dim_passenger(passenger_sk),
+            flight_sk         NUMBER(38,0) REFERENCES dim_flight(flight_sk),
+            airport_sk        NUMBER(38,0) REFERENCES dim_airport(airport_sk),
+            date_sk           NUMBER(38,0) REFERENCES dim_date(date_sk),
+            passenger_status  VARCHAR,
+            ticket_type       VARCHAR
+            );
+        """
+    )
+    
+    
     test_connection >> create_raw_stage_table >> create_raw_table_stream
     test_connection >> create_core_stage_table >> create_core_table_stream
+    test_connection >> create_star_schema_tables
