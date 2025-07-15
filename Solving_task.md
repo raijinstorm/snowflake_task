@@ -1,58 +1,72 @@
-Here is a log of how I approached the task
+# Task Approach Log
 
-## First view on a task (day 1)
- Read the task description, realized that lot of keypoints are not clear for me. Highlighted the main part of a task - Create a main pipeline (1 Stage -> 2 Stage ->  3 Stage). I did not understand it at all and went to Gemini to discuss 3-layer pipeline. I got an idead how to approach designing the pipeline
+## First View on the Task (Day 1)
 
-## Learned basics of Snowflake on DataCamp courses (day 1-2)
- Took 3 courses on DataCamp, created a snowflake account, got familirized with snowsight interface
+Read the task description and realized that many key points were unclear to me. Highlighted the main requirement: Create a three-stage pipeline (Stage 1 → Stage 2 → Stage 3). Since the concept wasn't clear, I discussed it with Gemini and got a solid idea of how to design the pipeline.
 
-## Tried to repeat YT projects [airflow + s3 + snowflake] (day 3)
- Signed up for AWS account,  started building. The approach involved using airflow with astro cli - it did not work that well, I had to debug a lot. I spent the whole day trying to connect snowflake and s3 to an airflow, make it all work together. Basically I used the code from YT videos and from chatGPT, I was focused on making everything work so that I know how to set up my main project. But I did not succed , I still could not connect to snowflake and did not understand how astro works under the hood which made troubleshooting extremely hard. I decided to give up on this idea
+## Learning Snowflake Basics (Days 1-2)
 
-## Starting from scratch using my previous setup (day 3)
-I decided to do the same docker-compose set up for an airflow as I used in the latest project. I copied last project, deleted unnecesary components (mongoDB, libraries for python)
+Completed three DataCamp courses on Snowflake, created a Snowflake account, and became familiar with the Snowsight interface.
 
-## Designing pipiline and DWH (day 3-4)
- Used google colab to get familirized with a csv file. Chose entities and relations between them. Build a logical model (just table with atributes and relations to other tables) and normalized it (to 3NF). Also created an idea for a pipiline:
- 1. Raw stage: csv is copied into wide table (one-to-one)
- 2. Core stage: 3NF model
- 3. Analitics stage: Star-schema
- For now decided to limit scope of pipeline to initial load (eg no incremental load)
+## Attempting YouTube Projects (Airflow + S3 + Snowflake) (Day 3)
 
-## Setting up connection with Snowflake (day 4)
- So the task actually consits from 2 parts: snowsight (online) , airlfow with main logic (local). So before implementing main logic I prepared the "base" to work on top of, by creating in snowsight:
- - User
- - Role
- - Warehouse
- - Database
- - Stages (raw, core, mart)
- After this I set up connection from airflow to snowflake and tested it
+Signed up for an AWS account and began building a project. Initially used the Astro CLI approach with Airflow but faced numerous debugging issues. Spent the entire day attempting to connect Snowflake and S3 with Airflow, using code from YouTube videos and ChatGPT. My primary goal was to set everything up to better understand how to configure my main project. Unfortunately, I did not succeed—I couldn't establish a connection with Snowflake, and Astro's complexity made troubleshooting difficult. Decided to abandon this approach.
 
-## Creating DAGs with main logic (day 5-6)
- 1st dag for creating all the neccesary tables, 2nd for data pipeline. Implemented loading local csv file to raw table. I decided to simplify a pipeline and instead of 3NF for core table use widetable but cleaned. So for now the pipiline looks like this: 
- 1. CSV file is loaded into raw table 
- 2. New data is merged into core table using stream from raw table
- 3. New data is merged into Star-schema tables using stream from core table
+## Starting from Scratch with Previous Setup (Day 3)
 
- Note: csv files should have unique names. The file with the same name is not going to be loaded again (not a bug , but feature) 
- Note: found max length of text in string columns inside csv using pandas to diside on length of VARCHAR for DB
+Decided to reuse my previous Docker-compose setup for Airflow. Copied the previous project and removed unnecessary components such as MongoDB and extra Python libraries.
 
-Initially start table consisted of fact table and 4 dimensions (dim_passenger, dim_airport, dim_date, dim_flight) but then a problem appeared with flight dimension, bcs it basically did not have natural key. But, you could try to identify flight by pilot_name + flight_status + arrival_airport + departure_date. 
+## Designing the Pipeline and Data Warehouse (Days 3-4)
 
-Note: just to make all surorgate keys integers I used IDENTITY, but actually it is not obligatory
-Note: multiple queries read the stream, but only the first one got correct values, bcs after it read the data was marked "old" and other queries did not see new data. So I firstly materialize new data from stream into table and then read from it.
+Used Google Colab to explore the CSV file, chose relevant entities and their relationships, built a logical data model (tables with attributes and relationships), and normalized it to 3NF. Developed a pipeline concept with three stages:
 
+1. **Raw Stage**: CSV copied into a wide table (one-to-one)
+2. **Core Stage**: 3NF model
+3. **Analytics Stage**: Star-schema model
 
-## Debugging the pipiline (Day 6)
- Making whole pipline work so that I see final mart tables were just half of problem. I created few small csv files from data inside give csv file and started testing. I put in these csv incorect values, added duplicates, etc. When I made sure that it works as intended a decided to procces the whole csv file. After a run all of the tables looks normal, except fact table that ha 500m rows, while others had only 100k. I found out that the problem was in merges, bcs the "source" data for merge contained duplicates and bcs merges are parralel it put all the duplicates into table simultaneously => tables had duplicats which resulted in explosion of data for fact table. After I fixed this , the amount of data in dim_airport and dim_date significantly decreased, 
+Decided initially to limit the pipeline scope to an initial load (excluding incremental load).
 
-Note: ginve dataset is strange. It has 100k rows and about 100k unique passengers and about 100k unique flights.  It would be okay, if only passengers were all unique or vice verse, but not togeather . The data looks unrealistic.
+## Establishing Connection with Snowflake (Day 4)
 
-## Finishing up (Day 6)
- - Added logging to audit table
- - Added DML/DDL time-travle queries , secure view with row policy
+The task consists of two components: Snowsight (online) and Airflow (local). Before implementing the main logic, I prepared a foundational setup in Snowsight by creating:
 
+* User
+* Role
+* Warehouse
+* Database
+* Stages (raw, core, mart)
 
+Set up and successfully tested the connection from Airflow to Snowflake.
 
-# Ideas how to imporve project
-- While creating tables there is a lot of sql code , maybe it can be moved to .sql files ? 
+## Creating DAGs with Main Logic (Days 5-6)
+
+Created the first DAG to generate necessary tables and the second for the data pipeline. Implemented CSV loading into the raw table. Decided to simplify the pipeline by using a cleaned wide table instead of 3NF for the core stage. Current pipeline structure:
+
+1. Load CSV into raw table.
+2. Merge new data into the core table using a stream from the raw table.
+3. Merge new data into Star-schema tables using a stream from the core table.
+
+**Notes:**
+
+* CSV filenames must be unique; files with the same name won’t reload (intentional behavior).
+* Determined VARCHAR lengths in DB by finding the maximum text length of string columns in CSV using Pandas.
+
+Initially, the star schema included a fact table and four dimensions (`dim_passenger`, `dim_airport`, `dim_date`, `dim_flight`). However, the flight dimension lacked a natural key, potentially identifiable by combining `pilot_name`, `flight_status`, `arrival_airport`, and `departure_date`.
+
+**Additional Notes:**
+
+* Used IDENTITY to ensure integer surrogate keys, though it’s optional.
+* Multiple queries on the same stream resulted in incorrect reads after the initial query. Fixed by materializing stream data into a temporary table first.
+
+## Debugging the Pipeline (Day 6)
+
+Ensuring the pipeline worked properly involved testing with smaller CSV files containing deliberate errors and duplicates. Once confident, processed the entire dataset. Initial runs resulted in a disproportionately large fact table (500 million rows) compared to others (100k rows). Identified duplicates from parallel merge operations as the issue, and resolving this significantly reduced rows in dimensions like `dim_airport` and `dim_date`.
+
+**Dataset Observation:**
+The given dataset appears unrealistic, with nearly 100k unique passengers and 100k unique flights for 100k rows, suggesting data quality issues.
+
+## Finishing Up (Day 6)
+
+* Implemented logging in an audit table
+* Added DML/DDL time-travel queries and a secure view with row-level policies
+
