@@ -11,15 +11,14 @@ import logging
 
 DATA_DIR = os.getenv("DATA_DIR", "/opt/airflow/data")
 CSV_FILE_NAME = os.getenv("CSV_FILE_NAME", "airline_data.csv") 
-#testing
-#----
-CSV_FILE_NAME = "airline_data.csv"
-#----
 FULL_FILE_PATH = os.path.join(DATA_DIR, CSV_FILE_NAME)
 
 #User's default internal stage
 SNOWFLAKE_INTERNAL_STAGE = "@~"
 
+#
+CSV_FILE_NAME="airline_data.csv"
+#
 
 with DAG(
     "etl_snowflake",
@@ -127,6 +126,18 @@ with DAG(
                 source.continents, source.departure_date, source.arrival_airport, source.pilot_name, source.flight_status,
                 source.ticket_type, source.passenger_status
             ); 
+            
+            -- Logs for MERGE operation
+            INSERT INTO mart_stage.etl_audit_log (
+                task_id, target_table, operation_type, rows_affected, query_id
+            )
+            SELECT
+                'insert_into_core_table',
+                'core_stage.passengers_cleaned', 
+                'MERGE', 
+                "number of rows inserted" + "number of rows updated" + "number of rows deleted", 
+                LAST_QUERY_ID()
+            FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()));
         """
     )
     
@@ -173,6 +184,20 @@ with DAG(
             ) VALUES (
                 source.passenger_id, source.first_name, source.last_name, source.gender, source.age, source.nationality
             );
+            
+            --logs
+            INSERT INTO mart_stage.etl_audit_log (
+                task_id, target_table, operation_type, rows_affected, query_id
+            )
+            SELECT
+                'load_dim_passenger', 
+                'mart_stage.dim_passenger', 
+                'MERGE',
+                SUM(
+                    "number of rows inserted" + "number of rows updated" + "number of rows deleted"
+                ),
+                LAST_QUERY_ID()
+            FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()));
         """
     )
     
@@ -208,6 +233,21 @@ with DAG(
             ) VALUES (
                 source.airport_code, source.airport_name, source.country_code, source.country_name, source.continent_code, source.continent_name
             );
+            
+            --logs
+            INSERT INTO mart_stage.etl_audit_log (
+                task_id, target_table, operation_type, rows_affected, query_id
+            )
+            SELECT
+                'load_dim_airport', 
+                'mart_stage.dim_airport', 
+                'MERGE',
+                SUM(
+                    "number of rows inserted" + "number of rows updated" + "number of rows deleted"
+                ),
+                LAST_QUERY_ID()
+            FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()));
+            
         """
     )
     
@@ -242,6 +282,20 @@ with DAG(
                 ) VALUES (
                     source.flight_id, source.pilot_name, source.flight_status
                 );
+                
+                --logs
+                INSERT INTO mart_stage.etl_audit_log (
+                    task_id, target_table, operation_type, rows_affected, query_id
+                )
+                SELECT
+                    'load_dim_flight', 
+                    'mart_stage.dim_flight', 
+                    'MERGE',
+                    SUM(
+                        "number of rows inserted" + "number of rows updated" + "number of rows deleted"
+                    ),
+                    LAST_QUERY_ID()
+                FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()));
             """
         )
     
@@ -275,6 +329,20 @@ with DAG(
             ) VALUES (
                 source.date, source.day_of_week, source.month, source.year, source.quarter
             );
+            
+            --logs
+            INSERT INTO mart_stage.etl_audit_log (
+                task_id, target_table, operation_type, rows_affected, query_id
+            )
+            SELECT
+                'load_dim_date', 
+                'mart_stage.dim_date', 
+                'MERGE',
+                SUM(
+                    "number of rows inserted" + "number of rows updated" + "number of rows deleted"
+                ),
+                LAST_QUERY_ID()
+            FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()));
         """
     )
     
@@ -282,58 +350,57 @@ with DAG(
         task_id = "load_fact_flight_passenger",
         conn_id = "snowflake_default",
         sql="""
-    MERGE INTO mart_stage.fact_passenger_flight AS target
-    USING (
-      SELECT
-        -- generate a unique fact key
-        MD5(
-          src.passenger_id || '|' ||
-          dim_flight.flight_sk || '|' ||
-          TO_CHAR(src.departure_date, 'YYYYMMDD')
-        ) AS id,
-        dim_passenger.passenger_sk,
-        dim_flight.flight_sk,
-        dim_airport.airport_sk,
-        dim_date.date_sk,
-        src.passenger_status,
-        src.ticket_type,
-        METADATA$ACTION AS action_type
-      FROM core_stage.temp_stream_table AS src
-      LEFT JOIN mart_stage.dim_passenger AS dim_passenger
-        ON src.passenger_id = dim_passenger.passenger_id
-      LEFT JOIN mart_stage.dim_flight AS dim_flight
-        ON MD5(
-             src.pilot_name || src.flight_status ||
-             TO_CHAR(src.departure_date,'YYYY-MM-DD') ||
-             src.arrival_airport
-           ) = dim_flight.flight_id
-      LEFT JOIN mart_stage.dim_airport AS dim_airport
-        ON src.arrival_airport = dim_airport.airport_code
-      LEFT JOIN mart_stage.dim_date AS dim_date
-        ON src.departure_date = dim_date.date
-      WHERE src.METADATA$ACTION = 'INSERT'
-    ) AS source
-      ON target.id = source.id
+            MERGE INTO mart_stage.fact_passenger_flight AS target
+            USING (
+            SELECT
+                MD5(
+                src.passenger_id || '|' ||
+                dim_flight.flight_sk || '|' ||
+                TO_CHAR(src.departure_date, 'YYYYMMDD')
+                ) AS id,
+                dim_passenger.passenger_sk,
+                dim_flight.flight_sk,
+                dim_airport.airport_sk,
+                dim_date.date_sk,
+                src.passenger_status,
+                src.ticket_type,
+                METADATA$ACTION AS action_type
+            FROM core_stage.temp_stream_table AS src
+            LEFT JOIN mart_stage.dim_passenger AS dim_passenger
+                ON src.passenger_id = dim_passenger.passenger_id
+            LEFT JOIN mart_stage.dim_flight AS dim_flight
+                ON MD5(
+                    src.pilot_name || src.flight_status ||
+                    TO_CHAR(src.departure_date,'YYYY-MM-DD') ||
+                    src.arrival_airport
+                ) = dim_flight.flight_id
+            LEFT JOIN mart_stage.dim_airport AS dim_airport
+                ON src.arrival_airport = dim_airport.airport_code
+            LEFT JOIN mart_stage.dim_date AS dim_date
+                ON src.departure_date = dim_date.date
+            WHERE src.METADATA$ACTION = 'INSERT'
+            ) AS source
+            ON target.id = source.id
 
-    WHEN NOT MATCHED THEN
-      INSERT (
-        id,
-        passenger_sk,
-        flight_sk,
-        airport_sk,
-        date_sk,
-        passenger_status,
-        ticket_type
-      )
-      VALUES (
-        source.id,
-        source.passenger_sk,
-        source.flight_sk,
-        source.airport_sk,
-        source.date_sk,
-        source.passenger_status,
-        source.ticket_type
-      );
+            WHEN NOT MATCHED THEN
+            INSERT (
+                id, passenger_sk, flight_sk, airport_sk, date_sk, passenger_status, ticket_type
+            )
+            VALUES (
+                source.id, source.passenger_sk, source.flight_sk, source.airport_sk, source.date_sk, source.passenger_status, source.ticket_type
+            );
+      
+            --logs
+            INSERT INTO mart_stage.etl_audit_log (
+                task_id, target_table, operation_type, rows_affected, query_id
+            )
+            SELECT
+                'load_fact_flight_passenger', 
+                'mart_stage.fact_passenger_flight', 
+                'MERGE',
+                "number of rows inserted",
+                LAST_QUERY_ID()
+            FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()));
     """
     )
     

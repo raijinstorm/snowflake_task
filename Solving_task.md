@@ -40,6 +40,7 @@ I decided to do the same docker-compose set up for an airflow as I used in the l
 Initially start table consisted of fact table and 4 dimensions (dim_passenger, dim_airport, dim_date, dim_flight) but then a problem appeared with flight dimension, bcs it basically did not have natural key. But, you could try to identify flight by pilot_name + flight_status + arrival_airport + departure_date. 
 
 Note: just to make all surorgate keys integers I used IDENTITY, but actually it is not obligatory
+Note: multiple queries read the stream, but only the first one got correct values, bcs after it read the data was marked "old" and other queries did not see new data. So I firstly materialize new data from stream into table and then read from it.
 
 
 ## Debugging the pipiline (Day 6)

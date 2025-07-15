@@ -139,7 +139,23 @@ with DAG(
         """
     )
     
+    create_audit_table = SQLExecuteQueryOperator(
+        task_id = "create_audit_table",
+        conn_id = "snowflake_default",
+        sql = """
+            CREATE TABLE IF NOT EXISTS mart_stage.etl_audit_log (
+                log_id            BIGINT IDENTITY(1,1) PRIMARY KEY,
+                task_id           VARCHAR(255) NOT NULL,
+                target_table      VARCHAR(255) NOT NULL,
+                operation_type    VARCHAR(50) NOT NULL, 
+                rows_affected     NUMBER(38,0) NOT NULL,
+                query_id          VARCHAR(255),
+                log_timestamp     TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()
+            );
+        """
+    )
     
     test_connection >> create_raw_stage_table >> create_raw_table_stream
     test_connection >> create_core_stage_table >> create_core_table_stream
     test_connection >> create_star_schema_tables
+    test_connection >> create_audit_table
