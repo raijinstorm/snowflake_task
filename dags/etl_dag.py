@@ -16,10 +16,6 @@ FULL_FILE_PATH = os.path.join(DATA_DIR, CSV_FILE_NAME)
 #User's default internal stage
 SNOWFLAKE_INTERNAL_STAGE = "@~"
 
-#
-CSV_FILE_NAME="airline_data.csv"
-#
-
 with DAG(
     "etl_snowflake",
 ) as dag:
@@ -260,7 +256,7 @@ with DAG(
                     SELECT
                         -- Use the same hashing method as the fact table
                         MD5(
-                            pilot_name || flight_status || 
+                            TRIM(LOWER(pilot_name)) || flight_status || 
                             TO_CHAR(departure_date, 'YYYY-MM-DD') || arrival_airport
                         ) AS flight_id,
                         pilot_name,
@@ -370,7 +366,7 @@ with DAG(
                 ON src.passenger_id = dim_passenger.passenger_id
             LEFT JOIN mart_stage.dim_flight AS dim_flight
                 ON MD5(
-                    src.pilot_name || src.flight_status ||
+                    TRIM(LOWER(src.pilot_name))  || src.flight_status ||
                     TO_CHAR(src.departure_date,'YYYY-MM-DD') ||
                     src.arrival_airport
                 ) = dim_flight.flight_id
@@ -381,14 +377,20 @@ with DAG(
             WHERE src.METADATA$ACTION = 'INSERT'
             ) AS source
             ON target.id = source.id
-
-            WHEN NOT MATCHED THEN
-            INSERT (
+            WHEN MATCHED AND source.action_type = 'DELETE' THEN DELETE 
+            WHEN MATCHED AND source.action_type = 'UPDATE' THEN UPDATE SET 
+                target.passenger_sk = source.passenger_sk,
+                target.flight_sk = source.flight_sk,
+                target.airport_sk = source.airport_sk,
+                target.date_sk = source.date_sk,
+                target.passenger_status = source.passenger_status,
+                target.ticket_type = source.ticket_type
+            WHEN NOT MATCHED AND source.action_type = 'INSERT' THEN INSERT ( 
                 id, passenger_sk, flight_sk, airport_sk, date_sk, passenger_status, ticket_type
-            )
-            VALUES (
+            ) VALUES (
                 source.id, source.passenger_sk, source.flight_sk, source.airport_sk, source.date_sk, source.passenger_status, source.ticket_type
             );
+            
       
             --logs
             INSERT INTO mart_stage.etl_audit_log (
