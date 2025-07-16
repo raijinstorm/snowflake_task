@@ -1,10 +1,8 @@
 from airflow import DAG
 from airflow.providers.snowflake.operators.snowflake import SQLExecuteQueryOperator
-from airflow.operators.empty import EmptyOperator
 from airflow.sensors.filesystem import FileSensor
-from airflow.operators.python import PythonOperator
+from airflow.operators.python import  ShortCircuitOperator
 from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
-
 from datetime import datetime, timedelta
 import os
 import logging
@@ -16,13 +14,31 @@ FULL_FILE_PATH = os.path.join(DATA_DIR, CSV_FILE_NAME)
 #User's default internal stage
 SNOWFLAKE_INTERNAL_STAGE = "@~"
 
+
+def check_stream_for_new_data():
+    hook = SnowflakeHook(snowflake_conn_id = "snowflake_default")
+    conn = hook.get_conn()
+    curr = conn.cursor()
+    
+    curr.execute("SELECT COUNT(*) FROM core_stage.passengers_cleaned_stream;")
+    row_count = curr.fetchone()[0]
+    
+    curr.close()
+    conn.close()
+    
+    return row_count > 0
+    
+     
 with DAG(
     "etl_snowflake",
 ) as dag:
-    test_connection = SQLExecuteQueryOperator(
-        task_id = "test_connection",
-        conn_id = "snowflake_default",
-        sql= "SELECT 1"
+    wait_for_file = FileSensor(
+        task_id = "wait_for_file",
+        filepath = FULL_FILE_PATH,
+        poke_interval = 30,
+        timeout = 600,
+        fs_conn_id = "fs_default", 
+        dag = dag
     )
     
     #PUT file to stage
@@ -30,7 +46,7 @@ with DAG(
         task_id = "put_into_local_stage",
         conn_id = "snowflake_default",
         sql = f"""
-            PUT 'file://{FULL_FILE_PATH}' {SNOWFLAKE_INTERNAL_STAGE}/{CSV_FILE_NAME}
+            PUT 'file://{FULL_FILE_PATH}' {SNOWFLAKE_INTERNAL_STAGE}/uploads/{CSV_FILE_NAME}
             AUTO_COMPRESS = FALSE;
         """
     )
@@ -41,7 +57,7 @@ with DAG(
         conn_id = "snowflake_default",
         sql = f"""
             COPY INTO raw_stage.passengers_wide
-            FROM {SNOWFLAKE_INTERNAL_STAGE}/{CSV_FILE_NAME}
+            FROM {SNOWFLAKE_INTERNAL_STAGE}/uploads/{CSV_FILE_NAME}
             FILE_FORMAT = (
                 TYPE = CSV,
                 SKIP_HEADER = 1,
@@ -137,14 +153,18 @@ with DAG(
         """
     )
     
-    materialize_stream_to_temp_table  = SQLExecuteQueryOperator(
-        task_id = "materialize_stream_to_temp_table",
+    check_stream = ShortCircuitOperator(
+        task_id = "check_stream",
+        python_callable = check_stream_for_new_data
+    )
+    
+    materialize_stream_data  = SQLExecuteQueryOperator(
+        task_id = "materialize_stream_data",
         conn_id = "snowflake_default",
         sql = """
-            CREATE OR REPLACE TRANSIENT TABLE core_stage.temp_stream_table AS 
-            SELECT *
-            FROM core_stage.passengers_cleaned_stream
-            WHERE METADATA$ACTION IS NOT NULL;
+            TRUNCATE TABLE core_stage.temp_stream_table;
+            INSERT INTO core_stage.temp_stream_table
+                SELECT * FROM core_stage.passengers_cleaned_stream;
         """
     )
     
@@ -406,7 +426,7 @@ with DAG(
     """
     )
     
-    test_connection >> put_into_local_stage >> copy_data_to_raw_table >> insert_into_core_table
-    insert_into_core_table >> materialize_stream_to_temp_table >>[load_dim_passenger , load_dim_flight, load_dim_date, load_dim_airport] 
+    wait_for_file >> put_into_local_stage >> copy_data_to_raw_table >> insert_into_core_table
+    insert_into_core_table >> check_stream >> materialize_stream_data >>[load_dim_passenger , load_dim_flight, load_dim_date, load_dim_airport] 
     [load_dim_passenger , load_dim_flight, load_dim_airport, load_dim_date]  >> load_fact_flight_passenger
 

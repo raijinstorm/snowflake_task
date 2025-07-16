@@ -86,6 +86,36 @@ with DAG(
         """
     )
     
+    create_staging_table_for_stream = SQLExecuteQueryOperator(
+        task_id="create_staging_table_for_stream",
+        conn_id="snowflake_default",
+        sql="""
+            CREATE TABLE IF NOT EXISTS core_stage.temp_stream_table (
+                index_col NUMBER(38,0),
+                passenger_id VARCHAR(16777216),
+                first_name VARCHAR(16777216),
+                last_name VARCHAR(16777216),
+                gender VARCHAR(16777216),
+                age NUMBER(38,0),
+                nationality VARCHAR(16777216),
+                airport_name VARCHAR(16777216),
+                airport_country_code VARCHAR(16777216),
+                country_name VARCHAR(16777216),
+                airport_continent VARCHAR(16777216),
+                continents VARCHAR(16777216),
+                departure_date DATE,
+                arrival_airport VARCHAR(16777216),
+                pilot_name VARCHAR(16777216),
+                flight_status VARCHAR(16777216),
+                ticket_type VARCHAR(16777216),
+                passenger_status VARCHAR(16777216),
+                metadata$action VARCHAR(16777216),
+                metadata$isupdate BOOLEAN,
+                metadata$row_id VARCHAR(16777216)
+            );
+        """
+    )
+    
     with TaskGroup(group_id="create_star_schema_tables") as create_star_schema_tables_group:
         create_dim_passenger = SQLExecuteQueryOperator(
             task_id="create_dim_passenger",
