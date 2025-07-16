@@ -206,6 +206,10 @@ with DAG(
                 operation_type    VARCHAR(50) NOT NULL, 
                 rows_affected     NUMBER(38,0) NOT NULL,
                 query_id          VARCHAR(255),
+                start_timestamp   TIMESTAMP_NTZ,
+                end_timestamp     TIMESTAMP_NTZ,
+                execution_time    NUMBER(10,2),
+                error_message     VARCHAR,
                 log_timestamp     TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()
             );
         """
