@@ -215,6 +215,25 @@ with DAG(
         """
     )
     
+    create_copy_info_table = SQLExecuteQueryOperator(
+        task_id = "create_copy_info_table",
+        conn_id = "snowflake_default",
+        sql = """
+            CREATE TABLE IF NOT EXISTS raw_stage.copy_info_table (
+                copy_id NUMBER(38,0) IDENTITY PRIMARY KEY,
+                file_name TEXT,
+                file_size NUMBER(38,0),
+                last_load_time TIMESTAMP_LTZ,
+                status TEXT,
+                rows_parsed NUMBER(38,0),
+                rows_loaded NUMBER(38,0),
+                error_rows NUMBER(38,0),
+                first_error_message TEXT,
+                first_error_line_number NUMBER(38,0)
+            )
+        """
+    )
+    
     test_connection >> create_raw_stage_table >> create_raw_table_stream
     test_connection >> create_core_stage_table >> create_core_table_stream
     test_connection >> create_star_schema_tables_group

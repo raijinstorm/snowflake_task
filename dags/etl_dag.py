@@ -26,6 +26,7 @@ def check_stream_for_new_data():
     conn.close()
     
     return row_count > 0
+    
      
 def log_snowflake_query_to_audit(task_id, target_table, operation_type, sql):
     start_time = 0
@@ -141,13 +142,35 @@ with DAG(
         """
     )
     
-    
-    # #REMOVE file from stage
-    # remove_file_from_stage = SQLExecuteQueryOperator(
-    #     task_id = "remove_file_from_stage",
-    #     conn_id = "snowflake_default",
-    #     sql = f"REMOVE {SNOWFLAKE_INTERNAL_STAGE}/airline_data.csv;"
-    # )
+    log_copy_info = SQLExecuteQueryOperator(
+        task_id = "log_copy_info",
+        conn_id = "snowflake_default",
+        sql = """
+            INSERT INTO raw_stage.copy_info_table (
+                file_name,
+                file_size,
+                last_load_time,
+                status,
+                rows_parsed ,
+                rows_loaded,
+                error_rows,
+                first_error_message,
+                first_error_line_number 
+            )
+            SELECT
+                file_name,
+                file_size,
+                last_load_time,
+                status,
+                row_parsed AS rows_parsed ,
+                row_count AS rows_loaded,
+                error_count as error_rows,
+                first_error_message,
+                first_error_line_number  
+            FROM
+                TABLE(INFORMATION_SCHEMA.COPY_HISTORY(TABLE_NAME => 'RAW_STAGE.PASSENGERS_WIDE', START_TIME => DATEADD(HOUR, -1, CURRENT_TIMESTAMP())));
+        """
+    )
     
     insert_into_core_table = PythonOperator(
         task_id = "insert_into_core_table",
@@ -457,7 +480,8 @@ with DAG(
         }
     )
     
-    wait_for_file >> put_into_local_stage >> copy_data_to_raw_table >> insert_into_core_table
+    wait_for_file >> put_into_local_stage >> copy_data_to_raw_table
+    copy_data_to_raw_table >> [log_copy_info, insert_into_core_table]
     insert_into_core_table >> check_stream >> materialize_stream_data >>[load_dim_passenger , load_dim_flight, load_dim_date, load_dim_airport] 
     [load_dim_passenger , load_dim_flight, load_dim_airport, load_dim_date]  >> load_fact_flight_passenger
 

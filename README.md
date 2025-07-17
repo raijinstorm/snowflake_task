@@ -9,6 +9,12 @@ The pipeline involves several structured layers:
 * **Analytics Stage (Data Mart):** Data structured for efficient analytical queries and dashboarding.
 
 -----
+## Dashboard
+
+![](dashboard.png)
+
+-----
+
 
 ## Getting Started
 
