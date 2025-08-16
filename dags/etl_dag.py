@@ -29,22 +29,21 @@ def check_stream_for_new_data():
     
      
 def log_snowflake_query_to_audit(task_id, target_table, operation_type, sql):
-    start_time = 0
-    end_time = 0
+    """Execute a SQL statement in Snowflake and log metadata to an audit table."""
+    start_time = datetime.now()
+    end_time = start_time
     rows_affected = 0
     query_id = None
-    error_message = "NULL"
+    error_message = None
     
     hook = SnowflakeHook(snowflake_conn_id = "snowflake_default")
     conn = hook.get_conn()
     cursor = conn.cursor()
 
     try:
-        start_time = datetime.now()
         cursor.execute(sql)
-        end_time = datetime.now()
-        
         query_id = cursor.sfqid
+        end_time = datetime.now()
         
         result_scan_sql = f"""
             SELECT
@@ -68,7 +67,8 @@ def log_snowflake_query_to_audit(task_id, target_table, operation_type, sql):
     except Exception as e:
         logging.error(f"Error in task {task_id}: {e}")
         error_message = str(e)
-        rows_affected = 0 
+        rows_affected = 0
+        end_time = datetime.now()
     finally:
         if cursor:
             cursor.close()
@@ -76,7 +76,7 @@ def log_snowflake_query_to_audit(task_id, target_table, operation_type, sql):
             conn.close()
 
         execution_time = (end_time - start_time).total_seconds()
-        
+
         sql_error_message = ("'" + error_message.replace("'", "''") + "'") if error_message else 'NULL'
 
         audit_sql = f"""
@@ -85,11 +85,11 @@ def log_snowflake_query_to_audit(task_id, target_table, operation_type, sql):
                 start_timestamp, end_timestamp, execution_time, error_message
             )
             VALUES (
-                '{task_id}', 
-                '{target_table}', 
+                '{task_id}',
+                '{target_table}',
                 '{operation_type}',
                 {rows_affected}, -- Use the calculated rows_affected
-                {("'" + query_id + "'") if query_id else 'NULL'}, 
+                {("'" + query_id + "'") if query_id else 'NULL'},
                 '{start_time.strftime('%Y-%m-%d %H:%M:%S.%f')}',
                 '{end_time.strftime('%Y-%m-%d %H:%M:%S.%f')}',
                 {execution_time},
